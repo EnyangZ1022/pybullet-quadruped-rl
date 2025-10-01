@@ -44,7 +44,7 @@
 
 ## 🚀 快速开始
 ```bash
-git clone <你的仓库地址>
+git clone https://github.com/EnyangZ1022/pybullet-quadruped-rl/blob/main/
 cd quadruped_rl
 pip install -r requirements.txt
 python train_ppo.py
