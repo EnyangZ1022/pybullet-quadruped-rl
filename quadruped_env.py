@@ -284,7 +284,19 @@ class QuadrupedEnv(gym.Env):
         self.previous_pos = np.array(pos)
         self.previous_yaw = euler[2]
         
-        return observation, reward, terminated, truncated, reward_info
+        # 获取额外状态信息用于指标监控
+        vel, ang_vel = p.getBaseVelocity(self.robot_id)
+
+        # 构建info字典
+        info = {
+            'velocity': vel,           # (vx, vy, vz) 
+            'height': pos[2],         # 高度
+            'orientation': euler,     # (roll, pitch, yaw)
+            'action': self.current_action.copy(),
+            'reward_info': reward_info  # 原有的奖励分解
+        }
+
+        return observation, reward, terminated, truncated, info
     
     def close(self):
         """关闭环境"""
