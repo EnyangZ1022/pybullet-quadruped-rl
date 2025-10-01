@@ -3,4 +3,4 @@
 # 结果展示
 
 ## 训练曲线
-![Reward Curve](assets/reward_curve_v3.png)
+![Result Curve for version3](assets/ppo_metrics_v3_20251002_011446_metrics.png)
