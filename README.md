@@ -12,7 +12,6 @@
 ## 📂 目录结构
 
 
-.
 ├── quadruped_env.py # 核心环境
 ├── train_ppo.py # 训练脚本
 ├── requirements.txt # 依赖清单
