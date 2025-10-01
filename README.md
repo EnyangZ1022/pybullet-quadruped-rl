@@ -1,4 +1,4 @@
-# Quadruped PPO (PyBullet + SB3) - 专业版 
+# Quadruped PPO (PyBullet + SB3)
 
 这是一个基于 **PyBullet** 和 **Stable-Baselines3 (PPO)** 的四足机器人强化学习项目，  
 适合在 RTX 4070 等消费级显卡上运行，具备完整的指标监控和评估体系。
