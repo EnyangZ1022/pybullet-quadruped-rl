@@ -166,12 +166,12 @@ class QuadrupedEnv(gym.Env):
         
         # 2. 高度奖励 - 保持合适高度
         height = pos[2]
-        if 0.3 < height < 0.8:
+        if 0.18 < height < 0.25:      # 基于实际站立高度调整
             height_reward = 2.0
-        elif height > 0.15:
+        elif height > 0.12:           # 降低最低要求
             height_reward = 1.0
         else:
-            height_reward = -10.0  # 严重惩罚过低
+            height_reward = -10.0
         
         # 3. 姿态稳定奖励
         euler = p.getEulerFromQuaternion(orn)

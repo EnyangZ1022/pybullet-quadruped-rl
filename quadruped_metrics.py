@@ -81,6 +81,12 @@ class QuadrupedMetricsCallback(BaseCallback):
         self.episode_metrics['vx_mean'].append(float(np.mean(vx)))
         self.episode_metrics['vy_abs_mean'].append(float(np.mean(np.abs(vy))))
         self.episode_metrics['height_mean'].append(float(np.mean(heights)))
+
+         # 高度误差RMS - 基于vision60实际站立高度
+        target_height = 0.21  # vision60站立目标高度 (来自测试结果)
+        height_error_rms = np.sqrt(np.mean((heights - target_height)**2))
+        self.episode_metrics['height_error_rms'].append(float(height_error_rms))
+
         self.episode_metrics['roll_rms'].append(float(np.sqrt(np.mean(roll**2))))
         self.episode_metrics['pitch_rms'].append(float(np.sqrt(np.mean(pitch**2))))
         
@@ -109,7 +115,7 @@ class QuadrupedMetricsCallback(BaseCallback):
             return
             
         # 只记录关键指标，减少I/O
-        key_metrics = ['vx_mean', 'roll_rms', 'pitch_rms', 'episode_reward']
+        key_metrics = ['vx_mean', 'roll_rms', 'pitch_rms', 'height_error_rms', 'episode_reward']
         
         for metric_name in key_metrics:
             values = self.episode_metrics.get(metric_name, [])
