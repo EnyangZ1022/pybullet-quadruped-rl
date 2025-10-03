@@ -165,6 +165,20 @@ python scripts/export_comprehensive_metrics.py [run_name]
 
 📝 更新日志
 
+## V3b (2025-10-03) - 指标监控完善与评估工具
+
+### 🔧 问题修复
+✅ **修复训练中断问题**
+- 解决 `quadruped_metrics.py` 中缺失字段导致的 KeyError
+- 添加安全的字段访问，提升训练稳定性
+- 完善episode数据结构初始化
+
+### ✨ 新增功能  
+✅ **自动化评估工具** (`scripts/read_tensorboard_metrics.py`)
+- 从TensorBoard日志自动提取训练指标
+- 支持目标阈值对比，生成达标评估报告
+- 自动检测最新训练结果，简化分析流程
+
 ## V3b (2025-10-02) - 机器人高度校准与奖励修正
 
 ### 🎯 核心更新
