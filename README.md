@@ -101,7 +101,7 @@ Value/Policy Loss: 网络收敛状态
 Entropy: 探索与利用平衡
 
 📊 使用示例
-'''
+```bash
 # 快速验证算法改进
 python train_ppo.py
 
@@ -119,7 +119,7 @@ tensorboard --logdir=runs/latest_run/
 
 # 查看生成的对比图表
 ls docs/assets/*.png
-'''
+```bash
 
 ⚙️ 性能优化
 
