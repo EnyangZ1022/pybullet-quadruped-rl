@@ -119,7 +119,7 @@ tensorboard --logdir=runs/latest_run/
 
 # 查看生成的对比图表
 ls docs/assets/*.png
-```bash
+```
 
 ⚙️ 性能优化
 
