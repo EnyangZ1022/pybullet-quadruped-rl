@@ -364,16 +364,16 @@ def create_support_plots(leg_data, leg_names, orientation_data, support_patterns
                        f'{participation:.1f}%', ha='center', va='bottom')
     
     plt.tight_layout()
-    plt.savefig('v4b_support_analysis.png', dpi=300, bbox_inches='tight')
-    print(f"\n📈 支撑力分析图表已保存: v4b_support_analysis.png")
+    plt.savefig('v4c_support_analysis.png', dpi=300, bbox_inches='tight')
+    print(f"\n📈 支撑力分析图表已保存: v4c_support_analysis.png")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='V4b 支撑力和支撑质量诊断分析')
-    parser.add_argument('--model', type=str, required=True, help='V4b模型路径')
+    parser = argparse.ArgumentParser(description='V4c 支撑力和支撑质量诊断分析')
+    parser.add_argument('--model', type=str, required=True, help='V4cb模型路径')
     parser.add_argument('--episodes', type=int, default=3, help='分析的episode数量 (默认3)')
     
     args = parser.parse_args()
     
-    print("🚀 启动V4b支撑力诊断分析器...")
+    print("🚀 启动V4c支撑力诊断分析器...")
     analyze_support(args.model, args.episodes)
     print("✅ 分析完成！")

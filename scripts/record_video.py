@@ -99,7 +99,7 @@ def record_trained_agent():
     
     # 加载训练好的模型
     try:
-        model = PPO.load("ppo_quadruped_light.zip")
+        model = PPO.load("runs/ppo_metrics_v4c_20251004_033541/ppo_metrics_v4c_model.zip")
         print("模型加载成功!")
     except:
         print("模型未找到，请先训练模型")

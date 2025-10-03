@@ -11,7 +11,7 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 def find_latest_run():
     """找到最新的训练run"""
-    runs = glob.glob('runs/ppo_metrics_v4b_*')
+    runs = glob.glob('runs/ppo_metrics_v4c_*')
     if runs:
         return max(runs, key=os.path.getctime)
     return None
@@ -131,7 +131,7 @@ def main():
         log_dir = find_latest_run()
         if not log_dir:
             print("❌ 未找到训练结果，请指定log_dir")
-            print("用法: python scripts/read_tensorboard_metrics.py runs/ppo_metrics_v4b_xxx")
+            print("用法: python scripts/read_tensorboard_metrics.py runs/ppo_metrics_v4c_xxx")
             sys.exit(1)
         print(f"🔍 自动使用最新训练结果: {log_dir}")
     else:

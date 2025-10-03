@@ -184,7 +184,81 @@ class QuadrupedEnv(gym.Env):
         obs.extend(joint_velocities) # 12维关节速度
         
         return np.array(obs, dtype=np.float32)
+
+    def _calculate_symmetry_reward(self, ema_alpha=0.3, w=0.15, eps=1e-6, min_scale=0.05):
+        """
+        基于关节速度的对角线协调性奖励 - 适配V4d版本
+        ema_alpha: 滑动平均参数 (0.2-0.3适合实时控制)
+        w: 奖励最大值 (可稍微提高以增强信号)
+        min_scale: 最小归一化尺度，避免在静止时奖励爆炸
+        """
+        
+        # 获取关节速度 
+        v = []
+        for joint_id in self.joint_indices:
+            joint_state = p.getJointState(self.robot_id, joint_id)
+            v.append(joint_state[1])  # 关节速度
+        v = np.array(v, dtype=np.float32)  # 明确指定数据类型
     
+        # 初始化EMA状态 - 修复数据类型问题
+        if not hasattr(self, "_v_ema"):
+            self._v_ema = np.array(v.copy(), dtype=np.float32)  # 确保numpy数组
+            self._scale_ema = 0.1  # 初始尺度估计
+        
+        # 确保_v_ema是numpy数组（防御性编程）
+        if not isinstance(self._v_ema, np.ndarray):
+            self._v_ema = np.array(self._v_ema, dtype=np.float32)
+        
+        # 低通滤波 (EMA) - 现在数据类型一致
+        self._v_ema = ema_alpha * v + (1 - ema_alpha) * self._v_ema
+        v_s = self._v_ema
+        
+        # 其余代码保持不变...
+        FL = v_s[0:3]   
+        FR = v_s[3:6]   
+        RL = v_s[6:9]   
+        RR = v_s[9:12]  
+        
+        # 方向校正
+        sign = np.array([+1, +1, +1], dtype=np.float32)
+        
+        FLc = sign * FL
+        FRc = sign * FR  
+        RLc = sign * RL
+        RRc = sign * RR
+        
+        # 关键改进1: 检查对角线速度方向一致性
+        direction_penalty = 0.0
+        for i in range(3):  # hip, thigh, calf
+            # 对角线1 (FL-RR): 如果速度方向相反，施加惩罚
+            if FLc[i] * RRc[i] < -eps:  # 方向相反
+                direction_penalty += 0.1 * (abs(FLc[i]) + abs(RRc[i]))
+            
+            # 对角线2 (FR-RL): 如果速度方向相反，施加惩罚
+            if FRc[i] * RLc[i] < -eps:  # 方向相反  
+                direction_penalty += 0.1 * (abs(FRc[i]) + abs(RLc[i]))
+        
+        # 对角线差值计算
+        err_d1 = np.abs(FLc - RRc)  # 对角线1误差
+        err_d2 = np.abs(FRc - RLc)  # 对角线2误差
+        
+        # 关键改进2: 更鲁棒的自适应归一化
+        current_scale = np.sqrt(np.mean(v_s**2)) + eps
+        # 对尺度也进行EMA平滑，避免突变
+        self._scale_ema = ema_alpha * current_scale + (1 - ema_alpha) * self._scale_ema
+        scale = max(self._scale_ema, min_scale)  # 确保最小尺度
+        
+        # 关键改进3: 组合误差计算，考虑方向惩罚
+        normalized_err_d1 = np.clip(err_d1 / scale, 0, 5)  # 防止异常值
+        normalized_err_d2 = np.clip(err_d2 / scale, 0, 5)
+        
+        cost = (normalized_err_d1.mean() + normalized_err_d2.mean()) + direction_penalty / scale
+        
+        # 高斯核奖励映射
+        symmetry_reward = w * np.exp(-cost)
+        
+        return float(symmetry_reward)
+
     def _calculate_reward(self):
         """计算奖励 - 全面改进"""
         pos, orn = p.getBasePositionAndOrientation(self.robot_id)
@@ -231,7 +305,7 @@ class QuadrupedEnv(gym.Env):
             else:
                 joint_reward -= 0.1 * joint_diff
         
-        #V4b: 增加膝关节姿态奖励 - 彻底告别小腿收缩作弊策略
+        #V4b: 增加膝关节姿态奖励 - 防止小腿收缩作弊策略
         knee_extension_reward = 0.0
         # 膝关节索引：每条腿的第3个关节 (calf joints)
         knee_indices = [2, 5, 8, 11]  # 基于joint_indices顺序
@@ -262,11 +336,17 @@ class QuadrupedEnv(gym.Env):
         
         # 8. 存活奖励
         alive_reward = 0.2
+
+        # 10.v4c加入对称性奖励 - 鼓励左右腿协调运动
+        symmetry_reward = self._calculate_symmetry_reward()
+        
         
         total_reward = (forward_reward + height_reward + orientation_reward + 
                        direction_reward + joint_reward + knee_extension_reward + smoothness_reward +
-                       stability_penalty + lateral_penalty + alive_reward)
+                       stability_penalty + lateral_penalty + alive_reward + symmetry_reward)
         
+        self.previous_positions = joint_positions.copy()
+
         return total_reward, {
             'forward': forward_reward,
             'height': height_reward,
@@ -277,6 +357,7 @@ class QuadrupedEnv(gym.Env):
             'stability': stability_penalty,
             'lateral': lateral_penalty,
             'knee_extension': knee_extension_reward,
+            'symmetry': symmetry_reward,
         }
     
     def step(self, action):

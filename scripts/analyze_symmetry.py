@@ -12,6 +12,7 @@ import pybullet as p
 from stable_baselines3 import PPO
 from quadruped_env import QuadrupedEnv
 import argparse
+import matplotlib
 
 # 设置matplotlib字体
 matplotlib.rcParams['font.family'] = 'DejaVu Sans'  
@@ -92,7 +93,7 @@ def analyze_symmetry(model_path, episodes=5):
     
     # 对称性分析
     print("\n" + "="*60)
-    print("🎯 V4b 左右腿对称性诊断报告")
+    print("🎯 V4 左右腿对称性诊断报告")
     print("="*60)
     
     joint_types = ['hip', 'thigh', 'calf']
@@ -204,8 +205,8 @@ def create_symmetry_plots(left_data, right_data, joint_types):
         axes[1, i].grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig('v4b_symmetry_analysis.png', dpi=300, bbox_inches='tight')
-    print(f"\n📈 对称性分析图表已保存: v4b_symmetry_analysis.png")
+    plt.savefig('v4c_symmetry_analysis.png', dpi=300, bbox_inches='tight')
+    print(f"\n📈 对称性分析图表已保存: v4c_symmetry_analysis.png")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='V4b 四足机器人左右腿对称性诊断分析')
@@ -214,6 +215,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    print("🚀 启动V4b对称性诊断分析器...")
+    print("🚀 启动V4c对称性诊断分析器...")
     analyze_symmetry(args.model, args.episodes)
     print("✅ 分析完成！")

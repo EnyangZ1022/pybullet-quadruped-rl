@@ -253,16 +253,16 @@ def create_drift_plots(trajectories, yaw_data, lateral_data, angular_data):
     axes[1, 1].axhline(y=0, color='black', linestyle='--', alpha=0.5)
     
     plt.tight_layout()
-    plt.savefig('v4b_drift_analysis.png', dpi=300, bbox_inches='tight')
-    print(f"\n📈 转向偏差分析图表已保存: v4b_drift_analysis.png")
+    plt.savefig('v4c_drift_analysis.png', dpi=300, bbox_inches='tight')
+    print(f"\n📈 转向偏差分析图表已保存: v4c_drift_analysis.png")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='V4b 转向偏差和系统性漂移分析')
-    parser.add_argument('--model', type=str, required=True, help='V4b模型路径')
+    parser = argparse.ArgumentParser(description='V4c 转向偏差和系统性漂移分析')
+    parser.add_argument('--model', type=str, required=True, help='V4c模型路径')
     parser.add_argument('--episodes', type=int, default=3, help='分析的episode数量 (默认3)')
     
     args = parser.parse_args()
     
-    print("🚀 启动V4b转向偏差诊断分析器...")
+    print("🚀 启动V4c转向偏差诊断分析器...")
     analyze_drift(args.model, args.episodes)
     print("✅ 分析完成！")

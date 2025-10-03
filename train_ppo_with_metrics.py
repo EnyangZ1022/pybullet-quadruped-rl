@@ -35,7 +35,7 @@ def print_final_metrics_summary():
 
 def main():
     # 版本和时间戳
-    version = "ppo_metrics_v4b"
+    version = "ppo_metrics_v4c"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # 创建运行目录
