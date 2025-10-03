@@ -10,7 +10,7 @@ import numpy as np
 from quadruped_env import QuadrupedEnv
 from stable_baselines3 import PPO
 
-def analyze_height_performance(model_path="runs/ppo_metrics_v3_20251003_195425/ppo_metrics_v3_model.zip"):
+def analyze_height_performance(model_path="ppo_quadruped_light.zip"):
     """分析机器人的高度表现"""
     print("=== 机器人高度性能分析 ===")
     print(f"加载模型: {model_path}")

@@ -190,9 +190,9 @@ class QuadrupedEnv(gym.Env):
         pos, orn = p.getBasePositionAndOrientation(self.robot_id)
         vel, ang_vel = p.getBaseVelocity(self.robot_id)
         
-        # 1. 前进奖励 - 鼓励X轴正向移动
+        # 1. 加大前进奖励 - 更多鼓励X轴正向移动
         forward_velocity = vel[0]
-        forward_reward = min(forward_velocity * 3.0, 3.0)
+        forward_reward = min(forward_velocity * 5.0, 5.0)
         
         # 2. 高度奖励 - 保持合适高度
         height = pos[2]
@@ -231,6 +231,22 @@ class QuadrupedEnv(gym.Env):
             else:
                 joint_reward -= 0.1 * joint_diff
         
+        #V4b: 增加膝关节姿态奖励 - 彻底告别小腿收缩作弊策略
+        knee_extension_reward = 0.0
+        # 膝关节索引：每条腿的第3个关节 (calf joints)
+        knee_indices = [2, 5, 8, 11]  # 基于joint_indices顺序
+        for knee_idx in knee_indices:
+            if knee_idx < len(joint_positions):
+                knee_angle = joint_positions[knee_idx]
+                # 鼓励膝关节在合理范围内伸展(基于URDF: -2.618 to 2.618)
+                # 理想角度接近0(中性位置)，避免过度屈曲
+                if abs(knee_angle) < 0.8:  # 在±0.8弧度内为良好姿态
+                    knee_extension_reward += 0.2
+                elif abs(knee_angle) < 1.5:  # 适中姿态
+                    knee_extension_reward += 0.1
+                else:  # 过度屈曲惩罚
+                    knee_extension_reward -= 0.1 * abs(knee_angle)
+
         # 5. 动作平滑奖励 - 减少抖动
         if self.previous_action is not None:
             action_diff = np.sum(np.abs(self.current_action - self.previous_action))
@@ -248,7 +264,7 @@ class QuadrupedEnv(gym.Env):
         alive_reward = 0.2
         
         total_reward = (forward_reward + height_reward + orientation_reward + 
-                       direction_reward + joint_reward + smoothness_reward +
+                       direction_reward + joint_reward + knee_extension_reward + smoothness_reward +
                        stability_penalty + lateral_penalty + alive_reward)
         
         return total_reward, {
@@ -259,7 +275,8 @@ class QuadrupedEnv(gym.Env):
             'joint': joint_reward,
             'smoothness': smoothness_reward,
             'stability': stability_penalty,
-            'lateral': lateral_penalty
+            'lateral': lateral_penalty,
+            'knee_extension': knee_extension_reward,
         }
     
     def step(self, action):
