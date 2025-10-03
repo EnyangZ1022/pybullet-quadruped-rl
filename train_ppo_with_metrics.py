@@ -12,6 +12,27 @@ from datetime import datetime
 from quadruped_env import QuadrupedEnv
 from quadruped_metrics import QuadrupedMetricsCallback
 
+def print_final_metrics_summary():
+    """训练结束后打印关键指标摘要"""
+    print("\n" + "="*50)
+    print("🎯 训练完成 - 关键性能指标摘要")
+    print("="*50)
+    
+    print(f"📊 稳态性能指标:")
+    print(f"   前进速度 (vx_mean): 待查看TensorBoard")     
+    print(f"   横向漂移 (|vy|_mean): 待查看TensorBoard")   
+    print(f"   身体稳定性 (roll_rms): 待查看TensorBoard")
+    print(f"   身体稳定性 (pitch_rms): 待查看TensorBoard")
+    print(f"   航向稳定性 (yaw_rate_rms): 待查看TensorBoard")
+    
+    print(f"\n🛡️  鲁棒性指标:")
+    print(f"   跌倒频率: 待查看TensorBoard")     
+    print(f"   每步平均奖励: 待查看TensorBoard")        
+    
+    print(f"\n📈 使用以下命令查看详细指标:")
+    print(f"   tensorboard --logdir=runs/")
+    print("="*50)
+
 def main():
     # 版本和时间戳
     version = "ppo_metrics_v3"
@@ -82,10 +103,15 @@ def main():
     model_path = f"{log_dir}/{version}_model"
     model.save(model_path)
 
+    # 训练结束打印总结
     print(f"训练完成!")
     print(f"模型保存: {model_path}.zip")
+    print_final_metrics_summary()
     print(f"查看训练过程: tensorboard --logdir={log_dir}")
     print(f"生成对比图: python scripts/export_comprehensive_metrics.py {run_name}")
+
+
+
 
 if __name__ == "__main__":
     main()

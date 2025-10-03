@@ -290,8 +290,11 @@ class QuadrupedEnv(gym.Env):
         # 构建info字典
         info = {
             'velocity': vel,           # (vx, vy, vz) 
+            'angular_velocity': ang_vel,  # 新增：(wx, wy, wz)
             'height': pos[2],         # 高度
             'orientation': euler,     # (roll, pitch, yaw)
+            'terminated': terminated,     # 新增：是否终止
+            'fall_termination': terminated and pos[2] < 0.05,  # 新增：是否因跌倒终止
             'action': self.current_action.copy(),
             'reward_info': reward_info  # 原有的奖励分解
         }

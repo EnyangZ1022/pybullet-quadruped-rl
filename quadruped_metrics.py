@@ -73,10 +73,21 @@ class QuadrupedMetricsCallback(BaseCallback):
         heights = np.array(self.current_episode['heights'])
         orientations = np.array(self.current_episode['orientations'])  # (n, 2)
         
+        # 新增：跌倒统计 & yaw rate统计 & 安全访问
+        if 'falls' in self.current_episode and self.current_episode['falls']:
+            falls = sum(self.current_episode['falls'])
+            self.episode_metrics['fall_count'].append(falls)
+
+        if 'angular_velocities' in self.current_episode and self.current_episode['angular_velocities']:
+            ang_velocities = np.array(self.current_episode['angular_velocities'])
+            yaw_rates = ang_velocities[:, 2]
+            self.episode_metrics['yaw_rate_rms'].append(float(np.sqrt(np.mean(yaw_rates**2))))
+        
         # 批量计算指标
         vx, vy = velocities[:, 0], velocities[:, 1]
         roll, pitch = orientations[:, 0], orientations[:, 1]
         
+
         # 更新指标 (使用更高效的计算)
         self.episode_metrics['vx_mean'].append(float(np.mean(vx)))
         self.episode_metrics['vy_abs_mean'].append(float(np.mean(np.abs(vy))))
@@ -106,6 +117,8 @@ class QuadrupedMetricsCallback(BaseCallback):
             'velocities': [],
             'heights': [], 
             'orientations': [],
+            'angular_velocities': [],  # 添加这行
+            'falls': [],               # 添加这行
             'rewards': []
         }
     
