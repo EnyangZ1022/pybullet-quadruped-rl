@@ -165,6 +165,84 @@ python scripts/export_comprehensive_metrics.py [run_name]
 
 📝 更新日志
 
+## V4b (2025-10-03) 膝关节伸展奖励以及前进奖励增强
+
+Experiment Objective:
+- Eliminate "leg folding" cheating strategy via knee joint posture rewards
+- Re-motivate forward locomotion under joint constraints
+
+Core Implementation:
+- Knee Extension Rewards: Encourage joint angles within ±0.8 rad range
+- Forward Reward Weight: Increased from 3.0x to 5.0x (67% boost)
+- Target: Achieve biological-reasonable gait while maintaining forward progress
+
+Performance Results (750K steps):
+Achievements:
+- Forward velocity: -0.058 → 0.179 m/s (breakthrough from negative!)
+- Height control: 0.084 → 0.060 m RMS error (improved)
+- Stability: 0 falls per 1k steps
+- Knee extension: Successful elimination of leg folding
+
+Challenges Identified:
+- Symmetry degradation: 40/100 score (severe left-right imbalance)
+- Roll/Pitch stability: 0.174/0.336 rad RMS (exceeds 0.10 target)
+- Lateral drift: -0.107 m/s average (systematic left bias)
+
+Root Cause Analysis:
+- Forward reward weight (5.0x) created reward imbalance
+- Symmetry constraints absent, leading to asymmetric locomotion strategies
+- Support quality excellent (0.92/1.0) - NOT the primary issue
+
+V4c Direction:
+- Implement left-right symmetry rewards (Priority 1)
+- Rebalance forward reward weight to 4.0x
+- Address systematic lateral drift
+
+Files Modified:
+- quadruped_env.py: Knee extension reward system
+- train_ppo_with_metrics.py: V4b experiment tracking
+
+Diagnostic Tools Created:
+- scripts/analyze_symmetry.py: Left-right balance analysis
+- scripts/analyze_drift.py: Trajectory and turning bias analysis  
+- scripts/analyze_support.py: Leg support quality evaluation
+
+## V4A(2025-10-03): 应用关节限制与动作缩放
+
+🎯 **Experiment Objective**
+Implement URDF-based joint constraints to eliminate unrealistic joint movements and establish biological plausibility as foundation for advanced gait development.
+
+⚙️ **Core Implementation**
+- **Joint Limits System**: Extract limits from Vision60 URDF specifications
+  - Hip joints: ±1.045 rad (±59.9°)
+  - Thigh joints: ±2.618 rad (±150°)  
+  - Calf joints: ±2.618 rad (±150°)
+- **Independent Action Scaling**: Scale actions to 30% of joint range for safety
+- **Dynamic Constraint Clipping**: Real-time joint limit enforcement during simulation
+
+📊 **Performance Results (750K steps)**
+
+✅ **Achievements**
+- **Postural Improvement**: Visually more stable standing posture
+- **Joint Constraint Success**: All joints remain within URDF specifications
+- **Training Stability**: Consistent convergence without constraint violations
+- **System Integration**: Seamless integration with existing PPO training pipeline
+
+❌ **Performance Challenges**
+- **Forward Velocity**: Regression to -0.058 m/s (worse than V3's 0.029 m/s)
+- **Height Control Paradox**: RMS error increased from 0.017m → 0.084m despite better visual posture
+- **Roll/Pitch Stability**: Maintained similar levels to V3 baseline
+
+🔍 **Root Cause Analysis**
+- **Action Space Restriction**: 30% scaling may be overly conservative
+- **Reward Function Mismatch**: Existing rewards not optimized for constrained action space
+- **Exploration Limitation**: Reduced action range limiting policy exploration
+
+🧪 **Key Insights**
+1. **Visual vs Numerical Metrics**: Better standing posture doesn't always correlate with better numerical performance
+2. **Constraint Impact**: Joint limits can improve biological plausibility while degrading task performance
+3. **Reward Adaptation Needed**: Constrained action spaces require reward function rebalancing
+   
 ## V3b (2025-10-02) - 机器人高度校准与奖励修正
 
 ### 🎯 核心更新
