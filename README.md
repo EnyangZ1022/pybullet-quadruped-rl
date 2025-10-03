@@ -160,27 +160,54 @@ python scripts/export_comprehensive_metrics.py [run_name]
 
 📝 更新日志
 
-V3.0 (2025-10-02)
+## V3.0 (2025-10-03) - 专业指标监控系统
 
-✅ 完整指标监控系统
+### 🎯 核心更新
+✅ **完整指标监控系统** (`QuadrupedMetricsCallback`)
+- 实时追踪 9 个关键性能指标（速度、稳定性、高度控制）
+- 滑动窗口统计 + 性能优化的监控频率（每10K步）
+- 自动记录到 TensorBoard，支持实时分析
 
-✅ 自动化对比分析
+✅ **自动化对比分析** (`export_comprehensive_metrics.py`)
+- 生成标准化的训练对比图表（6类核心指标）
+- 支持多版本性能基准对比
+- 自动保存到 `docs/assets/` 目录
 
-✅ 系统化训练流程
+✅ **系统化训练流程**
+- 阶段1：快速原型验证 (`train_ppo.py`)
+- 阶段2：完整监控训练 (`train_ppo_with_metrics.py`) 
+- 阶段3：标准评估协议 (`eval_protocol.py`)
+- 阶段4：自动化分析与可视化
 
-✅ 性能优化配置
+✅ **性能优化配置**
+- RTX 4070 优化：达到 1,366 it/s 实际训练速度
+- 8 并行环境 + GPU 加速 + 内存优化
+- 智能监控频率平衡性能与数据质量
 
-V2.0
+### 🔧 技术细节
+- **机器人参数校准**: Vision60 (21.1cm), Minitaur (4.9cm), Spirit40 (17.5cm)
+- **Episode 配置**: 最大1000步，累积奖励范围 500-1500（正常）
+- **数据管理**: 时间戳命名 + runs/ 结构化存储
+- **视频系统**: 自动模型检测 + 智能路径解析
 
+### 📊 实际训练成果
+✅ 训练配置: 750K步，8环境并行，RTX 4070
+✅ 性能指标: ep_rew_mean=1290, ep_len_mean=1000步
+✅ 训练效率: 753,664步/9:12 = 1,366 it/s
+✅ 存储优化: ~348KB per模型，结构化管理
+✅ 监控体系: 9项指标实时追踪，自动图表生成
+
+### 🔍 训练数据解析
+- **单步奖励**: -1.2 ~ 1.4（环境即时反馈）
+- **累积奖励**: 1290（1000步Episode总和）
+- **训练验证**: 自动200步测试确保模型质量
+
+## V2.0
 ✅ 改进奖励函数
-
 ✅ 基础 TensorBoard 集成
 
-V1.0
-
+## V1.0  
 ✅ 基础 PPO 四足控制
-
-
 🌍 English Summary
 
 This is a professional quadruped reinforcement learning project with comprehensive metrics monitoring, automated comparison analysis, and systematic training workflow. Optimized for RTX 4070 GPUs with standardized evaluation protocols.
