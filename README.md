@@ -45,7 +45,7 @@ quadruped_rl/
     │   ├── reward.md
     │   └── results.md
     └── README.md
-'''
+```
 
 🚀 系统化训练流程
 阶段1: 快速原型验证 🏃‍♂️:
@@ -53,8 +53,10 @@ python train_ppo.py
 小规模快速测试（无监控开销），用于验证奖励函数/动作接口是否有效。
 
 阶段2: 参数优化 🔧
+```
 # 在 train_ppo.py 中调整 total_timesteps:
 python train_ppo.py
+```
 效果良好后，增加训练步数进行充分训练。
 
 阶段3: 完整监控训练 📊
@@ -63,10 +65,14 @@ python train_ppo_with_metrics.py
 
 阶段4: 专业评估与分析 📈
 # 生成训练指标图表
+```
 python scripts/export_comprehensive_metrics.py ppo_metrics_v3_20251002_011446
+```
 
 # 查看训练过程
+```
 tensorboard --logdir=runs/ppo_metrics_v3_20251002_011446
+```
 
 🎯 核心监控指标
 
@@ -144,7 +150,7 @@ RTX 4070 推荐配置
 结果复现：固定随机种子，记录关键超参数，保存环境配置
 
 🔧 快速开始
-'''
+```
 git clone https://github.com/EnyangZ1022/pybullet-quadruped-rl.git
 cd quadruped_rl
 pip install -r requirements.txt
@@ -155,8 +161,7 @@ python train_ppo.py
 # 完整流程
 python train_ppo_with_metrics.py
 python scripts/export_comprehensive_metrics.py [run_name]
-
-'''
+```
 
 📝 更新日志
 
