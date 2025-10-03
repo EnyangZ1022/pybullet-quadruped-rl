@@ -233,4 +233,17 @@ python scripts/export_comprehensive_metrics.py [run_name]
 ✅ 基础 PPO 四足控制
 🌍 English Summary
 
+### 分支备份内容速查
+```bash
+├── main (主分支)
+│   └── 最新的README更新版本
+└── exp/v3_1_quick (实验备份分支)
+    └── 完整的V3工作成果:
+        ├── 指标监控系统
+        ├── 机器人高度校准  
+        ├── 视频录制优化
+        ├── 性能优化配置
+        └── 所有训练脚本
+```
+    
 This is a professional quadruped reinforcement learning project with comprehensive metrics monitoring, automated comparison analysis, and systematic training workflow. Optimized for RTX 4070 GPUs with standardized evaluation protocols.
