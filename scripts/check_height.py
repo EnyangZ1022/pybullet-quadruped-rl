@@ -23,6 +23,28 @@ robot_joint_configs = {
     ]
 }
 
+# 在现有的test_robot_height函数中添加
+def get_joint_limits(robot_id):
+    """获取所有关节的限位信息"""
+    joint_limits = {}
+    num_joints = p.getNumJoints(robot_id)
+    
+    for i in range(num_joints):
+        joint_info = p.getJointInfo(robot_id, i)
+        if joint_info[2] != p.JOINT_FIXED:  # 非固定关节
+            joint_name = joint_info[1].decode('utf-8')
+            lower_limit = joint_info[8]  # 下限
+            upper_limit = joint_info[9]  # 上限
+            
+            joint_limits[i] = {
+                'name': joint_name,
+                'lower': lower_limit,
+                'upper': upper_limit,
+                'range': upper_limit - lower_limit
+            }
+    
+    return joint_limits
+
 def test_robot_height(model_name, joint_angles):
     """测试单个机器人的站立高度"""
     print(f"\n=== 测试 {model_name} ===")
@@ -80,11 +102,15 @@ def test_robot_height(model_name, joint_angles):
         print(f"平均稳定高度: {avg_height:.4f}m ± {std_height:.4f}m")
         print(f"高度范围: {min(heights):.4f}m - {max(heights):.4f}m")
         
-        return avg_height, std_height
+        # 🔥 在这里添加关节限位检查
+        print(f"\n--- 关节限位 ---")
+        joint_limits = get_joint_limits(robot_id)
+
+        return avg_height, std_height, joint_limits
 
     except Exception as e:
         print(f"测试失败: {e}")
-        return None, None
+        return None, None, None
 
 def main():
     # 连接PyBullet
@@ -97,13 +123,14 @@ def main():
     
     for model_name in robot_joint_configs.keys():
         joint_angles = robot_joint_configs[model_name]
-        avg_height, std_height = test_robot_height(model_name, joint_angles)
+        avg_height, std_height, joint_limits = test_robot_height(model_name, joint_angles)
         
         if avg_height is not None:
             results[model_name] = {
                 'height': avg_height,
                 'std': std_height,
-                'recommended_target': round(avg_height * 0.95, 3)  # 稍微低一点作为目标
+                'joint_limits': joint_limits,  
+                'recommended_target': round(avg_height * 0.95, 3)  # 建议目标高度
             }
 
     p.disconnect()
@@ -117,6 +144,11 @@ def main():
         print(f"\n{model_name}:")
         print(f"  站立高度: {data['height']:.4f}m ± {data['std']:.4f}m")
         print(f"  建议目标高度: {data['recommended_target']}m")
+        
+        if 'joint_limits' in data:
+            print(f"  关节限位信息:")
+            for joint_id, limits in data['joint_limits'].items():
+                print(f"    关节{joint_id} ({limits['name']}): [{limits['lower']:.3f}, {limits['upper']:.3f}] rad (范围: {limits['range']:.3f})")
     
     # 针对vision60的特别建议
     if 'quadruped/vision60.urdf' in results:

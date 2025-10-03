@@ -44,7 +44,6 @@ class VideoRecordingEnv:
         # 如果episode结束或达到视频长度，保存视频
         if terminated or truncated or self.current_step >= self.video_length:
             self._save_video()
-            print(f"Episode结束: 总奖励 = {total_reward}, 步数 = {self.current_step}")  # 添加调试信息
             
         return obs, reward, terminated, truncated, info
         
@@ -100,7 +99,7 @@ def record_trained_agent():
     
     # 加载训练好的模型
     try:
-        model = PPO.load("runs/ppo_metrics_v3_20251002_022018/ppo_metrics_v3_model.zip")
+        model = PPO.load("ppo_quadruped_light.zip")
         print("模型加载成功!")
     except:
         print("模型未找到，请先训练模型")
@@ -116,12 +115,19 @@ def record_trained_agent():
     for episode in range(3):
         print(f"\n录制第 {episode+1} 个episode...")
         
+        # 设置不同随机种子
+        import numpy as np
+        np.random.seed(100 + episode * 10)
+
         obs, _ = env.reset()
         total_reward = 0
         
-        for step in range(150):
+        for step in range(500):
             # 使用训练好的策略
-            action, _ = model.predict(obs, deterministic=True)
+            if episode == 0:
+                action, _ = model.predict(obs, deterministic=True)   # 最佳表现
+            else:
+                action, _ = model.predict(obs, deterministic=False)  # 不同变化
             obs, reward, terminated, truncated, _ = env.step(action)
             
             total_reward += reward
@@ -133,7 +139,7 @@ def record_trained_agent():
                 env._save_video()  # 强制保存
                 print(f"  Episode结束: 总奖励 = {total_reward:.3f}")
                 break
-        env._save_video()
+        
     env.close()
     print("\n录制完成! 视频保存在 ./videos/ 文件夹中")
 

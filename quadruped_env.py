@@ -51,10 +51,10 @@ class QuadrupedEnv(gym.Env):
         
         # 理想的关节角度 (站立姿态)
         self.default_joint_angles = [
-            0.0,  0.9, -1.8,  # 前左腿: 髋关节，上腿，下腿
-            0.0,  0.9, -1.8,  # 前右腿
-            0.0,  0.9, -1.8,  # 后左腿  
-            0.0,  0.9, -1.8,  # 后右腿
+            0.0,  0.9, 1.5,  # 前左腿: 髋关节，上腿，下腿
+            0.0,  0.9, 1.5,  # 前右腿
+            0.0,  0.9, 1.5,  # 后左腿  
+            0.0,  0.9, 1.5,  # 后右腿
         ]
         
         # 目标设置
@@ -65,7 +65,37 @@ class QuadrupedEnv(gym.Env):
         # episode相关
         self.step_count = 0
         self.max_steps = 1000
+
+        # V4a: 关节限位信息
+        self.joint_limits = {}
+        self.joint_action_scales = {}
+        self._setup_joint_limits()
+    
+    def _setup_joint_limits(self):
+        """V4a: 设置关节限位和缩放参数"""
+        # Vision60关节限位 (来自check_height.py的实测数据)
+        vision60_limits = {
+            0: {'lower': -0.430, 'upper': 0.430, 'range': 0.860},
+            1: {'lower': -3.142, 'upper': 3.142, 'range': 6.283},
+            2: {'lower': 0.000, 'upper': 3.142, 'range': 3.142},
+            4: {'lower': -0.430, 'upper': 0.430, 'range': 0.860},
+            5: {'lower': -3.142, 'upper': 3.142, 'range': 6.283},
+            6: {'lower': 0.000, 'upper': 3.142, 'range': 3.142},
+            8: {'lower': -0.430, 'upper': 0.430, 'range': 0.860},
+            9: {'lower': -3.142, 'upper': 3.142, 'range': 6.283},
+            10: {'lower': 0.000, 'upper': 3.142, 'range': 3.142},
+            12: {'lower': -0.430, 'upper': 0.430, 'range': 0.860},
+            13: {'lower': -3.142, 'upper': 3.142, 'range': 6.283},
+            14: {'lower': 0.000, 'upper': 3.142, 'range': 3.142},
+        }
+    
+        self.joint_limits = vision60_limits
         
+        # 根据关节范围设置独立的动作缩放
+        for joint_id, limits in self.joint_limits.items():
+            # 使用关节范围的30%作为单步动作的最大幅度
+            self.joint_action_scales[joint_id] = limits['range'] * 0.3
+
     def reset(self, seed=None, options=None):
         """重置环境"""
         super().reset(seed=seed)
@@ -244,10 +274,25 @@ class QuadrupedEnv(gym.Env):
         # 应用动作到关节 - 使用PD控制
         for i, joint_id in enumerate(self.joint_indices):
             if i < len(action):
-                # 限制动作范围并添加到默认角度
-                target_angle = self.default_joint_angles[i % len(self.default_joint_angles)]
-                target_angle += action[i] * 0.5  # 限制变化幅度
+                # 计算目标角度
+                base_angle = self.default_joint_angles[i % len(self.default_joint_angles)]
                 
+                # V4a: 使用关节特定的动作缩放
+                if joint_id in self.joint_action_scales:
+                    action_scale = self.joint_action_scales[joint_id]
+                else:
+                    action_scale = 0.5  # 默认缩放（兼容性）
+                
+                target_angle = base_angle + action[i] * action_scale
+                
+                # V4a: 根据URDF限位裁剪目标角度
+                if joint_id in self.joint_limits:
+                    limits = self.joint_limits[joint_id]
+                    target_angle = np.clip(target_angle, limits['lower'], limits['upper'])
+                
+                #if joint_id == 2:  # 调试默认角度用膝关节
+                #    print(f"关节{joint_id}: base={base_angle:.3f}, action={action[i]:.3f}, scale={action_scale:.3f}, target={target_angle:.3f}")
+
                 p.setJointMotorControl2(
                     self.robot_id, joint_id,
                     p.POSITION_CONTROL,
