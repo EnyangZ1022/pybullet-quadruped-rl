@@ -259,6 +259,25 @@ class QuadrupedEnv(gym.Env):
         
         return float(symmetry_reward)
 
+    def _calculate_roll_balance_reward(self):
+        """软性Roll角奖励 - 鼓励接近0°"""
+        pos, orn = p.getBasePositionAndOrientation(self.robot_id)
+        euler = p.getEulerFromQuaternion(orn)
+        roll_angle = euler[0]  # 保留正负号
+        
+        target_roll = 0.0  # 目标：水平
+        roll_error = abs(roll_angle - target_roll)
+        
+        # 渐进式奖励
+        if roll_error < 0.05:  # ±3°内 - 优秀
+            return 0.3
+        elif roll_error < 0.1:  # ±6°内 - 良好
+            return 0.2
+        elif roll_error < 0.2:  # ±11°内 - 可接受
+            return 0.1
+        else:  # 过度倾斜 - 惩罚
+            return -0.1 * roll_error
+            
     def _calculate_reward(self):
         """计算奖励 - 全面改进"""
         pos, orn = p.getBasePositionAndOrientation(self.robot_id)
@@ -337,13 +356,16 @@ class QuadrupedEnv(gym.Env):
         # 8. 存活奖励
         alive_reward = 0.2
 
-        # 10.v4c加入对称性奖励 - 鼓励左右腿协调运动
-        symmetry_reward = self._calculate_symmetry_reward()
+        # 10.v4c加入对称性奖励 - 鼓励左右腿协调运动,增加权重用以调整大小
+        symmetry_reward_weight = 0.7
+        symmetry_reward = symmetry_reward_weight * self._calculate_symmetry_reward()
         
+        #11.加入航向角奖励
+        roll_balance_reward = self._calculate_roll_balance_reward()
         
         total_reward = (forward_reward + height_reward + orientation_reward + 
                        direction_reward + joint_reward + knee_extension_reward + smoothness_reward +
-                       stability_penalty + lateral_penalty + alive_reward + symmetry_reward)
+                       stability_penalty + lateral_penalty + alive_reward + symmetry_reward + roll_balance_reward)
         
         self.previous_positions = joint_positions.copy()
 
@@ -358,6 +380,7 @@ class QuadrupedEnv(gym.Env):
             'lateral': lateral_penalty,
             'knee_extension': knee_extension_reward,
             'symmetry': symmetry_reward,
+            'roll_balance': roll_balance_reward,
         }
     
     def step(self, action):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 从TensorBoard日志中读取训练指标
-用法: python scripts/read_tensorboard_metrics.py runs/ppo_metrics_v4b_20251003_195933
+用法: python scripts/read_tensorboard_metrics.py runs/ppo_metrics_v**_timestamp
 """
 
 import os

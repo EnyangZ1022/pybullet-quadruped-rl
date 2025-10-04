@@ -61,7 +61,7 @@ def main():
 
     # 创建指标监控回调 - 降低监控频率以提升性能
     metrics_callback = QuadrupedMetricsCallback(
-        eval_freq=10000,  # 从2000改为10000，降低监控频率
+        eval_freq=75000,  # 从2000改为10000，降低监控频率
         verbose=1
     )
 
@@ -71,9 +71,9 @@ def main():
         'MlpPolicy',
         env,
         learning_rate=3e-4,
-        n_steps=512,         # 与原始相同
-        batch_size=64,       # 与原始相同
-        n_epochs=4,          # 与原始相同
+        n_steps=512,         
+        batch_size=64,       
+        n_epochs=4,         
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,

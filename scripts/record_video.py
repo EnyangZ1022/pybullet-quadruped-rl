@@ -4,6 +4,7 @@
 """
 import sys
 import os
+import argparse
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import time
 import numpy as np
@@ -11,6 +12,13 @@ import imageio
 from stable_baselines3 import PPO
 from quadruped_env import QuadrupedEnv
 import pybullet as p
+
+def parse_arguments():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='Record quadruped robot video')
+    parser.add_argument('model_path', type=str, help='Path to the trained model (.zip file)')
+    parser.add_argument('--episodes', type=int, default=1, help='Number of episodes to record (default: 1)')
+    return parser.parse_args()
 
 class VideoRecordingEnv:
     """带视频录制功能的环境包装器"""
@@ -97,13 +105,17 @@ def record_trained_agent():
     """录制训练好的智能体"""
     print("=== 录制训练好的机器人视频 ===")
     
-    # 加载训练好的模型
+    # 先验证，再加载训练好的模型
+    if not os.path.exists(args.model_path):
+        print(f"错误: 模型文件不存在: {args.model_path}")
+        sys.exit(1)
+
     try:
-        model = PPO.load("runs/ppo_metrics_v4c_20251004_033541/ppo_metrics_v4c_model.zip")
-        print("模型加载成功!")
-    except:
-        print("模型未找到，请先训练模型")
-        return
+        model = PPO.load(args.model_path)  # 使用参数路径
+        print(f"模型加载成功: {args.model_path}")
+    except Exception as e:
+        print(f"模型加载失败: {e}")
+        sys.exit(1)
     
     # 创建环境（无GUI但可以录制）
     base_env = QuadrupedEnv(render_mode=None)
@@ -144,4 +156,5 @@ def record_trained_agent():
     print("\n录制完成! 视频保存在 ./videos/ 文件夹中")
 
 if __name__ == "__main__":
+    args = parse_arguments()
     record_trained_agent()
