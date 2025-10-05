@@ -93,8 +93,13 @@ class QuadrupedEnv(gym.Env):
         
         # 根据关节范围设置独立的动作缩放
         for joint_id, limits in self.joint_limits.items():
-            # 使用关节范围的30%作为单步动作的最大幅度
-            self.joint_action_scales[joint_id] = limits['range'] * 0.3
+            # 根据关节类型设置不同缩放
+            if limits['range'] > 5.0:  # 大范围关节（thigh joints：1,5,9,13）
+                self.joint_action_scales[joint_id] = limits['range'] * 0.4
+            elif limits['range'] > 2.0:  # 中等范围关节（calf joints：2,6,10,14）  
+                self.joint_action_scales[joint_id] = limits['range'] * 0.8  # 更大缩放
+            else:  # 小范围关节（hip joints：0,4,8,12）
+                self.joint_action_scales[joint_id] = limits['range'] * 0.7
 
     def reset(self, seed=None, options=None):
         """重置环境"""
@@ -136,7 +141,7 @@ class QuadrupedEnv(gym.Env):
                 self.joint_indices.append(i)
         
         # 限制到12个主要关节
-        self.joint_indices = self.joint_indices[:12]
+        self.joint_indices = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
         
         # 设置初始关节角度 - 让机器人呈现正确的站立姿态
         for i, joint_id in enumerate(self.joint_indices):
@@ -185,107 +190,60 @@ class QuadrupedEnv(gym.Env):
         
         return np.array(obs, dtype=np.float32)
 
-    def _calculate_symmetry_reward(self, ema_alpha=0.3, w=0.15, eps=1e-6, min_scale=0.05):
-        """
-        基于关节速度的对角线协调性奖励 - 适配V4d版本
-        ema_alpha: 滑动平均参数 (0.2-0.3适合实时控制)
-        w: 奖励最大值 (可稍微提高以增强信号)
-        min_scale: 最小归一化尺度，避免在静止时奖励爆炸
-        """
+    def _calculate_heading_guidance_reward(self, vel, euler):
+        """积极的航向引导 - 而不仅仅是惩罚"""
+        lateral_velocity = vel[1]
+        roll_angle = euler[0]
         
-        # 获取关节速度 
-        v = []
-        for joint_id in self.joint_indices:
-            joint_state = p.getJointState(self.robot_id, joint_id)
-            v.append(joint_state[1])  # 关节速度
-        v = np.array(v, dtype=np.float32)  # 明确指定数据类型
+        # 惩罚明显的侧向漂移
+        if abs(lateral_velocity) > 0.15:      # 严重偏移 → 强惩罚
+            lateral_penalty = -2.0 * abs(lateral_velocity)
+        elif abs(lateral_velocity) > 0.08:    # 中度偏移 → 中惩罚  
+            lateral_penalty = -1.2 * abs(lateral_velocity)
+        elif abs(lateral_velocity) > 0.03:    # 轻度偏移 → 轻惩罚
+            lateral_penalty = -0.6 * abs(lateral_velocity)
+        else:                                 # 理想状态 → 无惩罚
+            lateral_penalty = 0.0
+        
+        # 奖励直线行走（轻微的正向激励）
+        straight_bonus = 0.1 if abs(lateral_velocity) < 0.02 else 0.0
+        
+        # 结合Roll角稳定性
+        roll_penalty = -0.3 * abs(roll_angle) if abs(roll_angle) > 0.2 else 0.0
+        
+        return lateral_penalty + straight_bonus + roll_penalty
     
-        # 初始化EMA状态 - 修复数据类型问题
-        if not hasattr(self, "_v_ema"):
-            self._v_ema = np.array(v.copy(), dtype=np.float32)  # 确保numpy数组
-            self._scale_ema = 0.1  # 初始尺度估计
+    def _calculate_safety_penalty(self, pos, euler):
+        """防止头部触地和过度倾斜的安全奖励"""
+        pitch_angle, roll_angle, base_height = euler[1], euler[0], pos[2]
+        safety_penalty = 0.0
         
-        # 确保_v_ema是numpy数组（防御性编程）
-        if not isinstance(self._v_ema, np.ndarray):
-            self._v_ema = np.array(self._v_ema, dtype=np.float32)
+        # 只惩罚真正危险的情况
+        if pitch_angle > 0.6:  # 放宽到34度
+            safety_penalty += 0.3 * (pitch_angle - 0.6)
+        elif pitch_angle > 0.4:  # 预警区，轻微惩罚
+            safety_penalty += 0.1 * (pitch_angle - 0.4)
         
-        # 低通滤波 (EMA) - 现在数据类型一致
-        self._v_ema = ema_alpha * v + (1 - ema_alpha) * self._v_ema
-        v_s = self._v_ema
+        if base_height < 0.10:  # 放宽最低高度
+            safety_penalty += 0.5 * (0.10 - base_height)
         
-        # 其余代码保持不变...
-        FL = v_s[0:3]   
-        FR = v_s[3:6]   
-        RL = v_s[6:9]   
-        RR = v_s[9:12]  
-        
-        # 方向校正
-        sign = np.array([+1, +1, +1], dtype=np.float32)
-        
-        FLc = sign * FL
-        FRc = sign * FR  
-        RLc = sign * RL
-        RRc = sign * RR
-        
-        # 关键改进1: 检查对角线速度方向一致性
-        direction_penalty = 0.0
-        for i in range(3):  # hip, thigh, calf
-            # 对角线1 (FL-RR): 如果速度方向相反，施加惩罚
-            if FLc[i] * RRc[i] < -eps:  # 方向相反
-                direction_penalty += 0.1 * (abs(FLc[i]) + abs(RRc[i]))
-            
-            # 对角线2 (FR-RL): 如果速度方向相反，施加惩罚
-            if FRc[i] * RLc[i] < -eps:  # 方向相反  
-                direction_penalty += 0.1 * (abs(FRc[i]) + abs(RLc[i]))
-        
-        # 对角线差值计算
-        err_d1 = np.abs(FLc - RRc)  # 对角线1误差
-        err_d2 = np.abs(FRc - RLc)  # 对角线2误差
-        
-        # 关键改进2: 更鲁棒的自适应归一化
-        current_scale = np.sqrt(np.mean(v_s**2)) + eps
-        # 对尺度也进行EMA平滑，避免突变
-        self._scale_ema = ema_alpha * current_scale + (1 - ema_alpha) * self._scale_ema
-        scale = max(self._scale_ema, min_scale)  # 确保最小尺度
-        
-        # 关键改进3: 组合误差计算，考虑方向惩罚
-        normalized_err_d1 = np.clip(err_d1 / scale, 0, 5)  # 防止异常值
-        normalized_err_d2 = np.clip(err_d2 / scale, 0, 5)
-        
-        cost = (normalized_err_d1.mean() + normalized_err_d2.mean()) + direction_penalty / scale
-        
-        # 高斯核奖励映射
-        symmetry_reward = w * np.exp(-cost)
-        
-        return float(symmetry_reward)
+        # 移除极端惩罚项
+        return safety_penalty
 
-    def _calculate_roll_balance_reward(self):
-        """软性Roll角奖励 - 鼓励接近0°"""
-        pos, orn = p.getBasePositionAndOrientation(self.robot_id)
-        euler = p.getEulerFromQuaternion(orn)
-        roll_angle = euler[0]  # 保留正负号
-        
-        target_roll = 0.0  # 目标：水平
-        roll_error = abs(roll_angle - target_roll)
-        
-        # 渐进式奖励
-        if roll_error < 0.05:  # ±3°内 - 优秀
-            return 0.3
-        elif roll_error < 0.1:  # ±6°内 - 良好
-            return 0.2
-        elif roll_error < 0.2:  # ±11°内 - 可接受
-            return 0.1
-        else:  # 过度倾斜 - 惩罚
-            return -0.1 * roll_error
-            
     def _calculate_reward(self):
         """计算奖励 - 全面改进"""
         pos, orn = p.getBasePositionAndOrientation(self.robot_id)
         vel, ang_vel = p.getBaseVelocity(self.robot_id)
-        
+        euler = p.getEulerFromQuaternion(orn)
+
         # 1. 加大前进奖励 - 更多鼓励X轴正向移动
-        forward_velocity = vel[0]
-        forward_reward = min(forward_velocity * 5.0, 5.0)
+        if vel[0] > 0.1:              # 明显前进
+            forward_reward = min(vel[0] * 6.5, 6.5)  # 稍微加强
+        elif vel[0] > 0.0:            # 缓慢前进
+            forward_reward = vel[0] * 3.0
+        else:                         # 后退惩罚
+            forward_reward = vel[0] * 12.0  # 强惩罚后退
+        
         
         # 2. 高度奖励 - 保持合适高度
         height = pos[2]
@@ -348,24 +306,31 @@ class QuadrupedEnv(gym.Env):
             smoothness_reward = 0.0
         
         # 6. 稳定性奖励 - 惩罚过度摇摆
-        stability_penalty = -0.1 * (abs(ang_vel[0]) + abs(ang_vel[1]) + abs(ang_vel[2]))
+        roll_stability = 0.2 if abs(roll) < 0.08 else -0.3 * abs(roll)
+        pitch_stability = 0.2 if abs(pitch) < 0.08 else -0.3 * abs(pitch)
+        stability_penalty = roll_stability + pitch_stability
         
-        # 7. 侧向移动惩罚 - 避免无目的转向
-        lateral_penalty = -0.5 * abs(vel[1])
         
         # 8. 存活奖励
-        alive_reward = 0.2
+        alive_reward = 0.1
 
-        # 10.v4c加入对称性奖励 - 鼓励左右腿协调运动,增加权重用以调整大小
-        symmetry_reward_weight = 0.7
-        symmetry_reward = symmetry_reward_weight * self._calculate_symmetry_reward()
+        #9.加入安全约束
+        safety_penalty = 0.5 * self._calculate_safety_penalty(pos, euler)
         
-        #11.加入航向角奖励
-        roll_balance_reward = self._calculate_roll_balance_reward()
+        #10.加入航向角奖励
+        heading_guidance_reward = self._calculate_heading_guidance_reward(vel, euler)
         
-        total_reward = (forward_reward + height_reward + orientation_reward + 
-                       direction_reward + joint_reward + knee_extension_reward + smoothness_reward +
-                       stability_penalty + lateral_penalty + alive_reward + symmetry_reward + roll_balance_reward)
+        total_reward = (forward_reward * 0.2
+                        + height_reward 
+                        + orientation_reward 
+                        + direction_reward 
+                        + joint_reward 
+                        + knee_extension_reward 
+                        + smoothness_reward 
+                        + stability_penalty  
+                        + alive_reward 
+                        + safety_penalty 
+                        + heading_guidance_reward)
         
         self.previous_positions = joint_positions.copy()
 
@@ -377,10 +342,9 @@ class QuadrupedEnv(gym.Env):
             'joint': joint_reward,
             'smoothness': smoothness_reward,
             'stability': stability_penalty,
-            'lateral': lateral_penalty,
             'knee_extension': knee_extension_reward,
-            'symmetry': symmetry_reward,
-            'roll_balance': roll_balance_reward,
+            'heading guidance': heading_guidance_reward,
+            'safety': safety_penalty,
         }
     
     def step(self, action):
@@ -419,8 +383,8 @@ class QuadrupedEnv(gym.Env):
                     p.POSITION_CONTROL,
                     targetPosition=target_angle,
                     force=self.max_force,
-                    positionGain=0.1,  # P控制增益
-                    velocityGain=0.01  # D控制增益
+                    positionGain=0.5,  # P控制增益
+                    velocityGain=0.05  # D控制增益
                 )
         
         # 执行物理仿真
