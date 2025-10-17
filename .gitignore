@@ -170,6 +170,14 @@ models/
 ppo_tensorboard/
 *.log
 
+# Experiments & logs
+runs/
+logs/
+outputs/
+videos/
+checkpoints/
+models/
+
 # IDE
 .vscode/
 .idea/
