@@ -225,6 +225,32 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Python
+__pycache__/
+*.py[cod]
+*.ipynb_checkpoints
+
+# venv
+.venv/
+venv/
+
+# Build
+build/
+dist/
+*.egg-info/
+
+# Experiments & logs
+runs/
+logs/
+outputs/
+videos/
+checkpoints/
+models/
+
+# OS
+.DS_Store
+Thumbs.db
+
 # PyPI configuration file
 .pypirc
 
