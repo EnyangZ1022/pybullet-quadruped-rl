@@ -190,162 +190,136 @@ class QuadrupedEnv(gym.Env):
         
         return np.array(obs, dtype=np.float32)
 
-    def _calculate_heading_guidance_reward(self, vel, euler):
-        """积极的航向引导 - 而不仅仅是惩罚"""
-        lateral_velocity = vel[1]
-        roll_angle = euler[0]
-        
-        # 惩罚明显的侧向漂移
-        if abs(lateral_velocity) > 0.15:      # 严重偏移 → 强惩罚
-            lateral_penalty = -2.0 * abs(lateral_velocity)
-        elif abs(lateral_velocity) > 0.08:    # 中度偏移 → 中惩罚  
-            lateral_penalty = -1.2 * abs(lateral_velocity)
-        elif abs(lateral_velocity) > 0.03:    # 轻度偏移 → 轻惩罚
-            lateral_penalty = -0.6 * abs(lateral_velocity)
-        else:                                 # 理想状态 → 无惩罚
-            lateral_penalty = 0.0
-        
-        # 奖励直线行走（轻微的正向激励）
-        straight_bonus = 0.1 if abs(lateral_velocity) < 0.02 else 0.0
-        
-        # 结合Roll角稳定性
-        roll_penalty = -0.3 * abs(roll_angle) if abs(roll_angle) > 0.2 else 0.0
-        
-        return lateral_penalty + straight_bonus + roll_penalty
-    
-    def _calculate_safety_penalty(self, pos, euler):
-        """防止头部触地和过度倾斜的安全奖励"""
-        pitch_angle, roll_angle, base_height = euler[1], euler[0], pos[2]
-        safety_penalty = 0.0
-        
-        # 只惩罚真正危险的情况
-        if pitch_angle > 0.6:  # 放宽到34度
-            safety_penalty += 0.3 * (pitch_angle - 0.6)
-        elif pitch_angle > 0.4:  # 预警区，轻微惩罚
-            safety_penalty += 0.1 * (pitch_angle - 0.4)
-        
-        if base_height < 0.10:  # 放宽最低高度
-            safety_penalty += 0.5 * (0.10 - base_height)
-        
-        # 移除极端惩罚项
-        return safety_penalty
-
     def _calculate_reward(self):
-        """计算奖励 - 全面改进"""
+        """Phase 1：零速度跟踪 + 稳定性优先 (基于系统诊断优化)"""
         pos, orn = p.getBasePositionAndOrientation(self.robot_id)
         vel, ang_vel = p.getBaseVelocity(self.robot_id)
-        euler = p.getEulerFromQuaternion(orn)
+        roll, pitch, yaw = p.getEulerFromQuaternion(orn)
 
-        # 1. 加大前进奖励 - 更多鼓励X轴正向移动
-        if vel[0] > 0.1:              # 明显前进
-            forward_reward = min(vel[0] * 6.5, 6.5)  # 稍微加强
-        elif vel[0] > 0.0:            # 缓慢前进
-            forward_reward = vel[0] * 3.0
-        else:                         # 后退惩罚
-            forward_reward = vel[0] * 12.0  # 强惩罚后退
+        # —— 辅助函数：死区 & 分段奖励 ——
+        def deadband_abs(x, tol):
+            """死区函数: |x| <= tol -> 0, else |x|-tol"""
+            ax = abs(x)
+            return 0.0 if ax <= tol else (ax - tol)
+
+        def band_reward(x, lo, hi, full=1.0, mid=0.5):
+            """分段奖励: x在[lo,hi]给full分；边缘区域给mid分；出界惩罚"""
+            if lo <= x <= hi:
+                return full
+            # 边缘容忍区间 (5%宽度)
+            width = hi - lo
+            delta = 0.05 * max(width, 1e-6)
+            if lo - delta <= x < lo:
+                return mid * (x - (lo - delta)) / delta
+            if hi < x <= hi + delta:
+                return mid * ((hi + delta) - x) / delta
+            return -0.2  # 轻微出界惩罚
+
+        # === 1) 零速度跟踪 (带死区容忍) ===
+        # 基于观察空间诊断：实际速度范围 vel_x:[-1.3,0.3], vel_y:[-1.2,0.6]
+        # 允许微小抖动避免过度敏感
+        vx_penalty = -deadband_abs(vel[0], 0.02) * 6.0    # 前进/后退惩罚
+        vy_penalty = -deadband_abs(vel[1], 0.02) * 10.0   # 侧漂惩罚更重
+        yaw_rate_penalty = -deadband_abs(ang_vel[2], 0.08) * 5.0  # 偏航惩罚
+
+        # === 2) 稳定性奖励 (大幅强化 - DeepSeek策略) ===
+        # 基于观察空间诊断：roll/pitch范围正常，四元数归一化良好
+        roll_abs, pitch_abs = abs(roll), abs(pitch)
         
+        # 姿态分级奖励 (更精细的稳定性评估)
+        if roll_abs < 0.05 and pitch_abs < 0.05:           # 优秀稳定 
+            stability_base = 3.0
+        elif roll_abs < 0.08 and pitch_abs < 0.08:         # 良好稳定
+            stability_base = 2.0  
+        elif roll_abs < 0.12 and pitch_abs < 0.12:         # 可接受
+            stability_base = 1.0
+        else:                                               # 不稳定
+            stability_base = -1.0
         
-        # 2. 高度奖励 - 保持合适高度
+        # 二次惩罚大角度偏移
+        stability_quadratic = -4.0 * (roll_abs**2 + pitch_abs**2)
+        stability_reward = stability_base + stability_quadratic
+
+        # === 3) 高度稳定 (基于观察空间诊断结果) ===
+        # 诊断显示：pos_z范围[0.168,0.433]，均值0.327
         height = pos[2]
-        if 0.18 < height < 0.25:      # 基于实际站立高度调整
-            height_reward = 2.0
-        elif height > 0.12:           # 降低最低要求
-            height_reward = 1.0
+        # 调整到诊断验证的实际范围
+        height_reward = band_reward(height, 0.28, 0.36, full=2.0, mid=1.0)
+        
+        # 危险高度强惩罚
+        if height < 0.18:  # 基于诊断最低观测值调整
+            height_penalty = -15.0 * (0.18 - height)
         else:
-            height_reward = -10.0
+            height_penalty = 0.0
+
+        # === 4) 膝关节奖励 (修复索引错误) ===
+        # 修正：joint_indices只有12个元素，索引0-11
+        # 根据Vision60结构：每条腿3个关节 [hip, thigh, calf]
+        knee_reward = 0.0
+        knee_indices_in_joint_list = [2, 5, 8, 11]  # 修正为正确的索引范围
         
-        # 3. 姿态稳定奖励
-        euler = p.getEulerFromQuaternion(orn)
-        roll, pitch, yaw = euler
-        
-        # 惩罚过度倾斜
-        orientation_reward = -5.0 * (abs(roll) + abs(pitch))
-        
-        # 朝向一致性奖励 - 保持朝前
-        yaw_diff = abs(yaw - self.previous_yaw)
-        if yaw_diff > math.pi:
-            yaw_diff = 2 * math.pi - yaw_diff
-        direction_reward = -2.0 * yaw_diff
-        
-        # 4. 关节角度奖励 - 鼓励合理的腿部姿态
-        joint_positions = []
+        for knee_idx in knee_indices_in_joint_list:
+            if knee_idx < len(self.joint_indices):  # 安全检查
+                joint_state = p.getJointState(self.robot_id, self.joint_indices[knee_idx])
+                knee_angle = joint_state[0]
+                
+                # 鼓励适度屈曲的自然站立姿态
+                if -1.8 <= knee_angle <= -1.2:          # 理想屈曲范围
+                    knee_reward += 0.3
+                elif -2.2 <= knee_angle <= -0.8:        # 可接受范围  
+                    knee_reward += 0.15
+                else:                                    # 过度屈曲/伸展惩罚
+                    knee_reward -= 0.1 * abs(knee_angle + 1.5)
+
+        # === 5) 关节速度平滑性 (基于观察空间诊断) ===
+        # 诊断显示：关节速度可能很大，但静止时应趋于零
+        joint_velocities = []
         for joint_id in self.joint_indices:
-            joint_state = p.getJointState(self.robot_id, joint_id)
-            joint_positions.append(joint_state[0])
+            joint_vel = p.getJointState(self.robot_id, joint_id)[1] 
+            joint_velocities.append(joint_vel)
         
-        joint_reward = 0.0
-        for i, (actual, desired) in enumerate(zip(joint_positions[:len(self.default_joint_angles)], 
-                                                 self.default_joint_angles)):
-            joint_diff = abs(actual - desired)
-            if joint_diff < 0.5:  # 接近理想角度
-                joint_reward += 0.1
-            else:
-                joint_reward -= 0.1 * joint_diff
-        
-        #V4b: 增加膝关节姿态奖励 - 防止小腿收缩作弊策略
-        knee_extension_reward = 0.0
-        # 膝关节索引：每条腿的第3个关节 (calf joints)
-        knee_indices = [2, 5, 8, 11]  # 基于joint_indices顺序
-        for knee_idx in knee_indices:
-            if knee_idx < len(joint_positions):
-                knee_angle = joint_positions[knee_idx]
-                # 鼓励膝关节在合理范围内伸展(基于URDF: -2.618 to 2.618)
-                # 理想角度接近0(中性位置)，避免过度屈曲
-                if abs(knee_angle) < 0.8:  # 在±0.8弧度内为良好姿态
-                    knee_extension_reward += 0.2
-                elif abs(knee_angle) < 1.5:  # 适中姿态
-                    knee_extension_reward += 0.1
-                else:  # 过度屈曲惩罚
-                    knee_extension_reward -= 0.1 * abs(knee_angle)
+        # 鼓励低关节速度 (静止状态)
+        smoothness_reward = -0.05 * np.mean(np.abs(joint_velocities))
 
-        # 5. 动作平滑奖励 - 减少抖动
-        if self.previous_action is not None:
-            action_diff = np.sum(np.abs(self.current_action - self.previous_action))
-            smoothness_reward = -0.1 * action_diff
-        else:
-            smoothness_reward = 0.0
-        
-        # 6. 稳定性奖励 - 惩罚过度摇摆
-        roll_stability = 0.2 if abs(roll) < 0.08 else -0.3 * abs(roll)
-        pitch_stability = 0.2 if abs(pitch) < 0.08 else -0.3 * abs(pitch)
-        stability_penalty = roll_stability + pitch_stability
-        
-        
-        # 8. 存活奖励
-        alive_reward = 0.1
+        # === 6) 存活奖励 ===
+        survival_reward = 0.4
 
-        #9.加入安全约束
-        safety_penalty = 0.5 * self._calculate_safety_penalty(pos, euler)
-        
-        #10.加入航向角奖励
-        heading_guidance_reward = self._calculate_heading_guidance_reward(vel, euler)
-        
-        total_reward = (forward_reward * 0.2
-                        + height_reward 
-                        + orientation_reward 
-                        + direction_reward 
-                        + joint_reward 
-                        + knee_extension_reward 
-                        + smoothness_reward 
-                        + stability_penalty  
-                        + alive_reward 
-                        + safety_penalty 
-                        + heading_guidance_reward)
-        
-        self.previous_positions = joint_positions.copy()
+        # === 组合权重 (Phase 1: 稳定性优先) ===
+        # 严格按照DeepSeek建议：stability_penalty权重2.0-3.0，forward_reward权重0.05-0.1
+        w_velocity = 0.05      # 大幅降低前进权重 (DeepSeek建议)
+        w_stability = 3.0      # 大幅提升稳定性权重 (DeepSeek建议)
+        w_height = 0.15        # 高度控制权重  
+        w_knee = 0.08          # 膝关节控制权重
+        w_smooth = 0.02        # 平滑性权重
 
-        return total_reward, {
-            'forward': forward_reward,
-            'height': height_reward,
-            'orientation': orientation_reward,
-            'direction': direction_reward,
-            'joint': joint_reward,
+        # 分项计算
+        velocity_term = w_velocity * (vx_penalty + vy_penalty + yaw_rate_penalty)
+        stability_term = w_stability * stability_reward  
+        height_term = w_height * (height_reward + height_penalty)
+        knee_term = w_knee * knee_reward
+        smooth_term = w_smooth * smoothness_reward
+
+        # 最终奖励
+        total_reward = (velocity_term + stability_term + height_term + 
+                    knee_term + smooth_term + survival_reward)
+
+        # 调试信息字典
+        reward_info = {
+            'total': total_reward,
+            'velocity_penalty': vx_penalty + vy_penalty + yaw_rate_penalty,
+            'stability': stability_reward,
+            'height': height_reward + height_penalty, 
+            'knee': knee_reward,
             'smoothness': smoothness_reward,
-            'stability': stability_penalty,
-            'knee_extension': knee_extension_reward,
-            'heading guidance': heading_guidance_reward,
-            'safety': safety_penalty,
+            'survival': survival_reward,
+            # 状态监控
+            'vel_x': vel[0], 'vel_y': vel[1], 'yaw_rate': ang_vel[2],
+            'roll': roll_abs, 'pitch': pitch_abs, 'height_val': height,
+            # 权重监控 (便于Phase 2调整)
+            'w_vel': w_velocity, 'w_stab': w_stability, 'w_height': w_height
         }
+
+        return total_reward, reward_info
     
     def step(self, action):
         """执行一步 - 改进的动作处理"""

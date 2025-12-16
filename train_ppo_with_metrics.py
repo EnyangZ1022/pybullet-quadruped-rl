@@ -35,7 +35,7 @@ def print_final_metrics_summary():
 
 def main():
     # 版本和时间戳
-    version = "ppo_metrics_v4c"
+    version = "ppo_metrics_v4e"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # 创建运行目录
@@ -61,7 +61,7 @@ def main():
 
     # 创建指标监控回调 - 降低监控频率以提升性能
     metrics_callback = QuadrupedMetricsCallback(
-        eval_freq=75000,  # 从2000改为10000，降低监控频率
+        eval_freq=5000,  # 监控频率
         verbose=1
     )
 
@@ -71,13 +71,13 @@ def main():
         'MlpPolicy',
         env,
         learning_rate=3e-4,
-        n_steps=512,         
+        n_steps=1024,         
         batch_size=64,       
-        n_epochs=4,         
+        n_epochs=10,         
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.01,
+        ent_coef=0.02,
         vf_coef=0.5,
         max_grad_norm=0.5,
         device=device,       # 确保GPU使用
@@ -89,12 +89,12 @@ def main():
     print("训练参数:")
     print(f"- 设备: {device}")
     print(f"- 并行环境: 8")
-    print(f"- 总步数: 750000")
-    print(f"- 指标监控频率: 每10000步")
+    print(f"- 总步数: 50000")
+    print(f"- 指标监控频率: 每5000步")
 
     # 训练 (带指标监控)
     model.learn(
-        total_timesteps=750000,  # 与原始相同
+        total_timesteps=50000,  # 与原始相同
         callback=metrics_callback,
         progress_bar=True
     )
